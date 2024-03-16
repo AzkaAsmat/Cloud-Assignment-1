@@ -1,5 +1,21 @@
 from dependancies import *
 from mysql_connection import *
+import logging
+
+logging.basicConfig(filename='activity.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
+def log_activity(action, user_id):
+    """
+    Logs admin activities.
+
+    Args:
+        action (str): The action performed by the admin.
+        user_id (int): The ID of the admin performing the action.
+    """
+    log_message = f"Admin with ID {user_id} performed action: {action}"
+    logging.info(log_message)
+
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS users_db (
@@ -25,16 +41,59 @@ def get_session_state():
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-def login():
+'''def login():
     user_input = st.radio('Please select an option:', options=['Sign In', 'Sign Up'], horizontal=True)
     
     if user_input == 'Sign In':
         sign_in()
         if get_session_state().user:
             user_dashboard()
+             # Upload data file section
+            st.header('Upload Data File')
+            uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+
+            if uploaded_file is not None:
+                upload_data(uploaded_file)
+    
+    elif user_input == 'Sign Up':
+        sign_up()'''
+
+def login():
+    user_input = st.radio('Please select an option:', options=['Sign In', 'Sign Up', 'Admin Sign In'], horizontal=True)
+    
+    if user_input == 'Sign In':
+        sign_in()
+        if get_session_state().user:
+            if get_session_state().user[4] == 'admin@gmail.com':  # Check if the user is admin
+                admin_dashboard()
+            else:
+                user_dashboard()
+                st.subheader("Upload Data File (Limit: 10MB per file)")
+                uploaded_file = st.file_uploader("Choose a CSV file (Max 10MB)", type="csv", accept_multiple_files=False)
+                
+
+
+
+                upload_data(uploaded_file)
     
     elif user_input == 'Sign Up':
         sign_up()
+    
+    elif user_input == 'Admin Sign In':
+        admin_sign_in()
+
+def admin_sign_in():
+    st.header('Admin Login')
+    email_login = st.text_input('Enter your email:', placeholder="admin@gmail.com")
+    password_login = st.text_input('Enter your Password:', placeholder="Password", type="password")
+    
+    if st.button("Admin Login"):
+        # Authenticate admin credentials
+        if email_login == 'admin@gmail.com' and password_login == 'malik123':  # Replace with actual admin credentials
+            st.success("Admin Login successful.")
+            admin_dashboard()
+        else:
+            st.error("Invalid email or password.")
 
 def generate_reset_token():
     return secrets.token_urlsafe(32)
@@ -160,7 +219,41 @@ def user_dashboard():
     #     get_session_state().user = None
     #     st.success("Logged out successfully.")
     #     login()
+'''def upload_data(file):
+    
+    #uploaded_file = st.file_uploader("Upload csv file:", type=["csv"], accept_multiple_files=False)
 
+# Check file size
+    if file.size > 10*1024*1024:  # 10MB limit
+        st.error("File size exceeds the limit (10MB). Please upload a smaller file.")
+        return
+    
+    # Read uploaded file
+    df = pd.read_csv(file)
+    
+    
+    df.to_sql('users_data', con=mysql.connector.connect(**config), if_exists='append', index=False)
+    
+    st.success("Data uploaded successfully!")'''
+
+def upload_data(file):
+    # Check if file is uploaded
+    if file is None:
+        st.error("Please upload a CSV file.")
+        return
+
+    # Check file size
+    if file.size > 10*1024*1024:  # 10MB limit
+        st.error("File size exceeds the limit (10MB). Please upload a smaller file.")
+        return
+    
+    # Read uploaded file
+    df = pd.read_csv(file)
+    
+    # Perform further processing and data upload
+    # (Your code for processing and uploading data goes here)
+
+    st.success("Data uploaded successfully!")
 
 def sign_in():
     st.header('User Login')
@@ -243,3 +336,106 @@ def sign_up():
             
             except IntegrityError:
                     st.error(f"Email {email_reg} is already registered. Please use a different email.")
+def admin_dashboard():
+    st.title("Admin Dashboard")
+    st.subheader("User Details")
+
+    # Fetch all users from the database
+    cur.execute("SELECT * FROM users_db")
+    all_users = cur.fetchall()
+
+    # Display user information and allow admin to make changes
+    for user in all_users:
+        st.write(f"ID: {user[0]}")
+        st.write(f"First Name: {user[1]}")
+        st.write(f"Last Name: {user[2]}")
+        st.write(f"Email: {user[4]}")
+        st.write(f"Date of Birth: {user[3]}")
+
+        st.subheader("Update User Details")
+
+        change_first_name = st.checkbox(f"Change First Name for User {user[0]}")
+
+        if change_first_name:
+            new_first_name = st.text_input(f"Enter new First Name for User {user[0]}")
+            changeb = st.button("Change First Name")
+            if changeb:
+                cur.execute('''
+                UPDATE users_db
+                SET first_name = %s
+                WHERE id = %s
+                ''', (new_first_name, user[0]))
+                connection.commit()
+                st.success("Updated Successfully")
+                log_activity(f"Changed First Name for User {user[0]}")
+
+        change_last_name = st.checkbox(f"Change Last Name for User {user[0]}")
+
+        if change_last_name:
+            new_last_name = st.text_input(f"Enter new Last Name for User {user[0]}")
+            changel = st.button("Change Last Name")
+            if changel:
+                cur.execute('''
+                UPDATE users_db
+                SET last_name = %s
+                WHERE id = %s
+                ''', (new_last_name, user[0]))
+                connection.commit()
+                st.success("Updated Successfully")
+                log_activity(f"Changed Last Name for User {user[0]}")
+
+        change_dob = st.checkbox(f"Change Date of Birth for User {user[0]}")
+
+        if change_dob:
+            new_dob = st.text_input(f"Enter new Date of Birth for User {user[0]} (YYYY-MM-DD)")
+            changed = st.button("Change DOB")
+            if changed:
+                cur.execute('''
+                UPDATE users_db
+                SET dob = %s
+                WHERE id = %s
+                ''', (new_dob, user[0]))
+                connection.commit()
+                st.success("Updated Successfully")
+                log_activity(f"Changed Date of Birth for User {user[0]}")
+
+        st.subheader("Actions")
+        passbutton = st.checkbox(f"Change Password for User {user[0]}")
+
+        if passbutton:
+            oldpass = st.text_input("Enter the old password", type="password")
+            newpass = st.text_input("Enter the new password", type="password")
+            connpass = st.text_input("Confirm the new password", type="password")
+            changep = st.button("Change")
+            if changep:
+                if hash_password(oldpass) != user[5]:
+                    st.error("Old password doesn't match")
+                else:
+                    if newpass != connpass:
+                        st.error("New and Confirm password don't match")
+                    else:
+                        hashpass = hash_password(newpass)
+                        cur.execute('''
+                        UPDATE users_db
+                        SET password = %s
+                        WHERE id = %s
+                        ''', (hashpass, user[0]))
+                        connection.commit()
+                        st.success("Password Updated Successfully")
+                        log_activity(f"Changed Password for User {user[0]}")
+
+        # Provide option to deactivate or activate user
+        st.subheader("Change User Status")
+        toggle_status = st.radio(f"Toggle Status for User {user[0]}", options=["Activate", "Deactivate"])
+        if st.button(f"{toggle_status} User {user[0]}"):
+            new_status = 1 if toggle_status == "Activate" else 0
+            cur.execute('''
+            UPDATE users_db
+            SET status = %s
+            WHERE id = %s
+            ''', (new_status, user[0]))
+            connection.commit()
+            st.success(f"User {user[0]} {toggle_status.lower()}d successfully")
+            log_activity(f"{toggle_status} User {user[0]}")
+
+        st.write('---')

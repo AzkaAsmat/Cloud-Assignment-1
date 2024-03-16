@@ -28,13 +28,14 @@ def main():
 
     if app_mode == 'User':
         login()
-    
+        
+
     elif app_mode == 'About':
         about()
         
         
-    else:
-        home()
+    #else:
+     #   home()
 
 if __name__ == "__main__":
     try:
